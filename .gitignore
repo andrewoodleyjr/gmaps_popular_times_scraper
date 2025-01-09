@@ -134,3 +134,5 @@ dmypy.json
 .pyre/
 .DS_Store
 chromedriver
+.DS_Store
+*/.DS_Store
