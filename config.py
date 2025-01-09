@@ -9,8 +9,8 @@ HEADER_COLUMNS = ('place', 'url', 'scrape_time', 'day_of_week', 'hour_of_day', '
 
 # path to chrome and chromedriver
 CHROME_BINARY_LOCATION = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
-# 11/26/2024: Selenium doesn't have that option anymore; use EXPORT
-# CHROMEDRIVER_BINARY_LOCATION = '/usr/local/bin/chromedriver'
+CHROMEDRIVER_BINARY_LOCATION = '/usr/local/bin/chromedriver'
+
 
 # keep an cache of the source htmls, with a timestamp in the filename
 # if so, they should be cleaned out once in a while, since they are 1MB each

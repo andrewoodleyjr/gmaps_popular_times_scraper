@@ -232,5 +232,15 @@ def parse_html(html):
 
 	return data
 
+def convert_time(time_str):
+	hr = int(time_str.split()[0])
+    # Convert AM/PM time to 24-hour time
+	if 'PM' in time_str:
+		hr %= 12
+		hr += 12
+	elif 'AM' in time_str:
+		hr %= 12
+	return hr  # If no AM/PM is found, just return the time as is
+
 if __name__ == '__main__':
 	main()
