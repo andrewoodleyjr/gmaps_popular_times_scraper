@@ -16,6 +16,7 @@ from selenium.common.exceptions import TimeoutException
 from bs4 import BeautifulSoup
 from datetime import datetime
 import pandas as pd
+import traceback
 
 # load local params from config.py
 import config
@@ -57,8 +58,12 @@ def main():
 		try:
 			data = run_scraper(url)
 		except:
+		except Exception as e:
 			print('ERROR:', url, run_time)
-			# go to next url
+			print('Exception type:', type(e).__name__)
+			print('Exception message:', e)
+			traceback.print_exc()  # This prints the full traceback for debugging
+			# Go to next URL
 			continue
 
 		if len(data) > 0:
