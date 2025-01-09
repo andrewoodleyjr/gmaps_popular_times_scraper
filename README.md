@@ -17,6 +17,11 @@ Install required packages ([selenium](https://pypi.org/project/selenium/) and [b
 
     pip3 install -r requirements.txt
 
+If using a virtual enviornment
+    python3 -m venv venv   # Create a virtual environment
+    source venv/bin/activate  # Activate the virtual environment
+    pip install -r requirements.txt  # Install dependencies in the virtual environment
+
 Modify these lines in the code `config.py` to point to your path of Chrome and chromedriver.
 
     CHROME_BINARY_LOCATION = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
