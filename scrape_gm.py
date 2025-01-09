@@ -189,23 +189,23 @@ def parse_html(html):
 		hour_prev = hour
 		freq_now = None
 
-		# iterate over hours to get popularity data
-		for pop in pops:
-			# note that data is stored sunday first, regardless of the local
-			t = pop['aria-label']
-			# debugging
-			# print(t)
+		try:
+			if 'usually' not in t:
+				# Example: 61% busy at 10 AM.
+				freq = int(t.split('%')[0])  # Extract "25%"
+				hour = int(convert_time(t.split('at ')[1].strip('.')))  # Extract "8 AM"
+			else:
+				# Example: Currently 53% busy, usually 74% busy (no hour provided)
+				# hour is the previous value + 1
+				freq = int(t.split("%")[-2].split()[-1])
+				hour = hour + 1
 
-			try:
-				# if the text doesn't contain 'usually', it's a regular hour
-				if 'usually' not in t:
-					hour = int(t.split()[3])
-					freq = int(t.split('%')[0]) # gm uses int
-				else:
-					# the current hour has special text
-					# hour is the previous value + 1
-					hour = hour + 1
-					freq = int((t.split()[-2]).split('%')[0])
+				# gmaps gives the current popularity,
+				# but only the current hour has it
+				try:
+					freq_now =  int(t.split("%")[0].split()[1])
+				except:
+					freq_now = None
 
 					# gmaps gives the current popularity,
 					# but only the current hour has it
