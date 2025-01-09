@@ -13,9 +13,12 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.by import By
 from selenium.common.exceptions import TimeoutException
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.service import Service
 from bs4 import BeautifulSoup
 from datetime import datetime
 import pandas as pd
+import traceback
 
 # load local params from config.py
 import config
@@ -56,9 +59,12 @@ def main():
 
 		try:
 			data = run_scraper(url)
-		except:
+		except Exception as e:
 			print('ERROR:', url, run_time)
-			# go to next url
+			print('Exception type:', type(e).__name__)
+			print('Exception message:', e)
+			traceback.print_exc()  # This prints the full traceback for debugging
+			# Go to next URL
 			continue
 
 		if len(data) > 0:
@@ -121,29 +127,21 @@ def get_html(u,file_name):
 	else:
 		# requires chromedriver
 		options = webdriver.ChromeOptions()
-		#options.add_argument('--start-maximized')
-		options.add_argument('--headless')
-		# https://stackoverflow.com/a/55152213/2327328
-		# I choose German because the time is 24h, less to parse
-		# options.add_argument('--lang=de-DE')
-		options.add_argument('--lang=en-US')
-		prefs = {
-			# block image loading
-			"profile.managed_default_content_settings.images": 2,
-		}
-
-		# 11/26/2024: It may be worth checking if these options make it faster
-		# options.add_argument("--headless=new")
-		# options.add_argument("--disable-extensions")
-	
+		# options.add_argument('--start-maximized')
+		options.add_argument('--headless') 
+		prefs = { "profile.managed_default_content_settings.images": 2 } # block image loading
 		options.add_experimental_option("prefs", prefs)
+		# I choose German because the time is 24h, less to parse 
+		# https://stackoverflow.com/a/55152213/2327328
+		options.add_argument('--lang=de-DE') 
+		options.add_argument("--disable-blink-features=AutomationControlled")  # Prevent detection as bot
+		options.add_argument("--enable-javascript")  # Explicitly enable JavaScript
+		options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.5938.92 Safari/537.36") # Use to mock a browser
+
 		options.binary_location = config.CHROME_BINARY_LOCATION
-		
-		# 11/26/2024: chrome_driver_binary location can no longer be passed
-		# chrome_driver_binary = config.CHROMEDRIVER_BINARY_LOCATION
-		
-		# d = webdriver.Chrome(chrome_driver_binary, options=options)
-		d = webdriver.Chrome(options=options)
+		chrome_driver_binary = config.CHROMEDRIVER_BINARY_LOCATION
+		service = Service(chrome_driver_binary) # Chrome_Driver_Binary is added as a service
+		d = webdriver.Chrome(service=service, options=options) 
 
 		# get page
 		d.get(u)
@@ -152,11 +150,8 @@ def get_html(u,file_name):
 		# timeout after max N seconds (config.py)
 		# based on https://stackoverflow.com/questions/26566799/wait-until-page-is-loaded-with-selenium-webdriver-for-python
 		try:
-			# wait until page is completed loaded
-
-			# wait until a tag that starts with 'Popular times at' is present
-			WebDriverWait(d, config.SLEEP_SEC).until(EC.presence_of_element_located((By.XPATH, '//*[starts-with(@id, "Popular times at")]')))
-			# WebDriverWait(d, config.SLEEP_SEC).until(EC.presence_of_element_located((By.CLASS, 'fMc7Ne mQXJne gjs6Ee')))
+			# Wait until an element with aria-label containing "% busy" is present
+			element = WebDriverWait(d, config.SLEEP_SEC).until(EC.presence_of_element_located((By.CSS_SELECTOR, "[aria-label*='% busy']")))
 		except TimeoutException:
 			print('ERROR: Timeout! (This could be due to missing "popular times" data, or not enough waiting.)',u)
 
@@ -172,16 +167,9 @@ def get_html(u,file_name):
 		return html
 
 def parse_html(html):
-
 	soup = BeautifulSoup(html,features='html.parser')
 
-	# there is no class 'section-popular-times-bar'
-	# pops = soup.find_all('div', {'class': 'section-popular-times-bar'})
-	# find element containing a tag that starts with 'Popular times at'
-	div_tag_list = soup.find(
-					lambda tag:tag.name == "div" and tag.has_attr('aria-label') and
-					str.startswith(tag["aria-label"],'Popular times at'))
-
+	pops = soup.find_all('div', {'aria-label': lambda x: x and '% busy' in x})
 
 	# find div containing 7 divs (one for each week day):
 	for div_tag in div_tag_list:
@@ -191,28 +179,33 @@ def parse_html(html):
 	# hour = 0
 	# dow = 0
 	data = []
-	for dow, weekday_tag in enumerate(div_tag):
-		pops = weekday_tag.find_all(lambda tag:tag.name == "div" and tag.has_attr('aria-label'))
-		hour = -1
+
+	for pop in pops:
+		# note that data is stored sunday first, regardless of the local
+		t = pop['aria-label']
+		# debugging
+		# print(t)
+
+		hour_prev = hour
 		freq_now = None
 
-		# iterate over hours to get popularity data
-		for pop in pops:
-			# note that data is stored sunday first, regardless of the local
-			t = pop['aria-label']
-			# debugging
-			# print(t)
+		try:
+			if 'usually' not in t:
+				# Example: 61% busy at 10 AM.
+				freq = int(t.split('%')[0])  # Extract "25%"
+				hour = int(convert_time(t.split('at ')[1].strip('.')))  # Extract "8 AM"
+			else:
+				# Example: Currently 53% busy, usually 74% busy (no hour provided)
+				# hour is the previous value + 1
+				freq = int(t.split("%")[-2].split()[-1])
+				hour = hour + 1
 
-			try:
-				# if the text doesn't contain 'usually', it's a regular hour
-				if 'usually' not in t:
-					hour = int(t.split()[3])
-					freq = int(t.split('%')[0]) # gm uses int
-				else:
-					# the current hour has special text
-					# hour is the previous value + 1
-					hour = hour + 1
-					freq = int((t.split()[-2]).split('%')[0])
+				# gmaps gives the current popularity,
+				# but only the current hour has it
+				try:
+					freq_now =  int(t.split("%")[0].split()[1])
+				except:
+					freq_now = None
 
 					# gmaps gives the current popularity,
 					# but only the current hour has it
@@ -238,6 +231,16 @@ def parse_html(html):
 				dow += 1
 
 	return data
+
+def convert_time(time_str):
+	hr = int(time_str.split()[0])
+    # Convert AM/PM time to 24-hour time
+	if 'PM' in time_str:
+		hr %= 12
+		hr += 12
+	elif 'AM' in time_str:
+		hr %= 12
+	return hr  # If no AM/PM is found, just return the time as is
 
 if __name__ == '__main__':
 	main()
