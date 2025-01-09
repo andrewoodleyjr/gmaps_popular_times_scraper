@@ -125,29 +125,21 @@ def get_html(u,file_name):
 	else:
 		# requires chromedriver
 		options = webdriver.ChromeOptions()
-		#options.add_argument('--start-maximized')
-		options.add_argument('--headless')
-		# https://stackoverflow.com/a/55152213/2327328
-		# I choose German because the time is 24h, less to parse
-		# options.add_argument('--lang=de-DE')
-		options.add_argument('--lang=en-US')
-		prefs = {
-			# block image loading
-			"profile.managed_default_content_settings.images": 2,
-		}
-
-		# 11/26/2024: It may be worth checking if these options make it faster
-		# options.add_argument("--headless=new")
-		# options.add_argument("--disable-extensions")
-	
+		# options.add_argument('--start-maximized')
+		options.add_argument('--headless') 
+		prefs = { "profile.managed_default_content_settings.images": 2 } # block image loading
 		options.add_experimental_option("prefs", prefs)
+		# I choose German because the time is 24h, less to parse 
+		# https://stackoverflow.com/a/55152213/2327328
+		options.add_argument('--lang=de-DE') 
+		options.add_argument("--disable-blink-features=AutomationControlled")  # Prevent detection as bot
+		options.add_argument("--enable-javascript")  # Explicitly enable JavaScript
+		options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.5938.92 Safari/537.36") # Use to mock a browser
+
 		options.binary_location = config.CHROME_BINARY_LOCATION
-		
-		# 11/26/2024: chrome_driver_binary location can no longer be passed
-		# chrome_driver_binary = config.CHROMEDRIVER_BINARY_LOCATION
-		
-		# d = webdriver.Chrome(chrome_driver_binary, options=options)
-		d = webdriver.Chrome(options=options)
+		chrome_driver_binary = config.CHROMEDRIVER_BINARY_LOCATION
+		service = Service(chrome_driver_binary) # Chrome_Driver_Binary is added as a service
+		d = webdriver.Chrome(service=service, options=options) 
 
 		# get page
 		d.get(u)
