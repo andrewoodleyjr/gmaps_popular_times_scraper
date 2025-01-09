@@ -46,20 +46,13 @@ def main():
 	# write to folder logs to remember the state of the config file
 	urls.to_csv('logs' + os.sep + run_time + '.log', index = False)
 
-	# url_list = urls.iloc[:, 0].tolist()
-	# for url in url_list:
-	for index, row in urls.iterrows():
-		url = row['#url']
-		if len(row) > 1:
-			name = row['name']
-		else:
-			name = url
+	url_list = urls.iloc[:, 0].tolist()
+	for url in url_list:
 		#print(urllib.parse.urlparse(url))
 		#print (url)
 
 		try:
 			data = run_scraper(url)
-		except:
 		except Exception as e:
 			print('ERROR:', url, run_time)
 			print('Exception type:', type(e).__name__)
@@ -78,8 +71,7 @@ def main():
 
 				# write data
 				for row in data:
-					# f.write(config.DELIM.join((file_name,url,run_time)) + config.DELIM + config.DELIM.join([str(x or '') for x in row])+'\n')
-					f.write(config.DELIM.join((name,url,run_time)) + config.DELIM + config.DELIM.join([str(x or '') for x in row])+'\n')
+					f.write(config.DELIM.join((file_name,url,run_time)) + config.DELIM + config.DELIM.join([str(x or '') for x in row])+'\n')
 
 			print('DONE:', url, run_time)
 
@@ -128,13 +120,13 @@ def get_html(u,file_name):
 	else:
 		# requires chromedriver
 		options = webdriver.ChromeOptions()
-		#options.add_argument('--start-maximized')
-		options.add_argument('--headless')
-		# https://stackoverflow.com/a/55152213/2327328
-		# I choose German because the time is 24h, less to parse
+		# options.add_argument('--start-maximized')
+		options.add_argument('--headless') 
 		prefs = { "profile.managed_default_content_settings.images": 2 } # block image loading
 		options.add_experimental_option("prefs", prefs)
-		options.add_argument('--lang=de-DE')
+		# I choose German because the time is 24h, less to parse 
+		# https://stackoverflow.com/a/55152213/2327328
+		options.add_argument('--lang=de-DE') 
 		options.add_argument("--disable-blink-features=AutomationControlled")  # Prevent detection as bot
 		options.add_argument("--enable-javascript")  # Explicitly enable JavaScript
 		options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.5938.92 Safari/537.36") # Use to mock a browser
@@ -151,11 +143,8 @@ def get_html(u,file_name):
 		# timeout after max N seconds (config.py)
 		# based on https://stackoverflow.com/questions/26566799/wait-until-page-is-loaded-with-selenium-webdriver-for-python
 		try:
-			# wait until page is completed loaded
-
-			# wait until a tag that starts with 'Popular times at' is present
-			WebDriverWait(d, config.SLEEP_SEC).until(EC.presence_of_element_located((By.XPATH, '//*[starts-with(@id, "Popular times at")]')))
-			# WebDriverWait(d, config.SLEEP_SEC).until(EC.presence_of_element_located((By.CLASS, 'fMc7Ne mQXJne gjs6Ee')))
+			# Wait until an element with aria-label containing "% busy" is present
+			element = WebDriverWait(d, config.SLEEP_SEC).until(EC.presence_of_element_located((By.CSS_SELECTOR, "[aria-label*='% busy']")))
 		except TimeoutException:
 			print('ERROR: Timeout! (This could be due to missing "popular times" data, or not enough waiting.)',u)
 
@@ -171,70 +160,55 @@ def get_html(u,file_name):
 		return html
 
 def parse_html(html):
-
 	soup = BeautifulSoup(html,features='html.parser')
 
-	# there is no class 'section-popular-times-bar'
-	# pops = soup.find_all('div', {'class': 'section-popular-times-bar'})
-	# find element containing a tag that starts with 'Popular times at'
-	div_tag_list = soup.find(
-					lambda tag:tag.name == "div" and tag.has_attr('aria-label') and
-					str.startswith(tag["aria-label"],'Popular times at'))
+	pops = soup.find_all('div', {'aria-label': lambda x: x and '% busy' in x})
 
-
-	# find div containing 7 divs (one for each week day):
-	for div_tag in div_tag_list:
-		if len(div_tag.find_all('div', recursive=False)) == 7:
-			break
-
-	# hour = 0
-	# dow = 0
+	hour = 0
+	dow = 0
 	data = []
-	for dow, weekday_tag in enumerate(div_tag):
-		pops = weekday_tag.find_all(lambda tag:tag.name == "div" and tag.has_attr('aria-label'))
-		hour = -1
+
+	for pop in pops:
+		# note that data is stored sunday first, regardless of the local
+		t = pop['aria-label']
+		# debugging
+		# print(t)
+
+		hour_prev = hour
 		freq_now = None
 
-		# iterate over hours to get popularity data
-		for pop in pops:
-			# note that data is stored sunday first, regardless of the local
-			t = pop['aria-label']
-			# debugging
-			# print(t)
+		try:
+			if 'usually' not in t:
+				# Example: 61% busy at 10 AM.
+				freq = int(t.split('%')[0])  # Extract "25%"
+				hour = int(convert_time(t.split('at ')[1].strip('.')))  # Extract "8 AM"
+			else:
+				# Example: Currently 53% busy, usually 74% busy (no hour provided)
+				# hour is the previous value + 1
+				freq = int(t.split("%")[-2].split()[-1])
+				hour = hour + 1
 
-			try:
-				# if the text doesn't contain 'usually', it's a regular hour
-				if 'usually' not in t:
-					hour = int(t.split()[3])
-					freq = int(t.split('%')[0]) # gm uses int
-				else:
-					# the current hour has special text
-					# hour is the previous value + 1
-					hour = hour + 1
-					freq = int((t.split()[-2]).split('%')[0])
+				# gmaps gives the current popularity,
+				# but only the current hour has it
+				try:
+					freq_now =  int(t.split("%")[0].split()[1])
+				except:
+					freq_now = None
 
-					# gmaps gives the current popularity,
-					# but only the current hour has it
-					try:
-						freq_now = int((t.split()[1]).split('%')[0])
-					except:
-						freq_now = None
-
-				# if hour < hour_prev:
-				# 	# increment the day if the hour decreases
-				# 	dow += 1
-
-				data.append([days[dow], hour, freq, freq_now])
-				freq_now = None
-				# could also store an array of dictionaries
-				#data.append({'day' : days[dow % 7], 'hour' : hour, 'popularity' : freq})
-
-			except:
-				# if a day is missing, the line(s) won't be parsable
-				# this can happen if the place is closed on that day
-				# skip them, hope it's only 1 day per line,
-				# and increment the day counter
+			if hour < hour_prev:
+				# increment the day if the hour decreases
 				dow += 1
+
+			data.append([days[dow % 7], hour, freq, freq_now])
+			# could also store an array of dictionaries
+			#data.append({'day' : days[dow % 7], 'hour' : hour, 'popularity' : freq})
+
+		except:
+			# if a day is missing, the line(s) won't be parsable
+			# this can happen if the place is closed on that day
+			# skip them, hope it's only 1 day per line,
+			# and increment the day counter
+			dow += 1
 
 	return data
 
