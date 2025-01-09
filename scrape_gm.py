@@ -148,11 +148,8 @@ def get_html(u,file_name):
 		# timeout after max N seconds (config.py)
 		# based on https://stackoverflow.com/questions/26566799/wait-until-page-is-loaded-with-selenium-webdriver-for-python
 		try:
-			# wait until page is completed loaded
-
-			# wait until a tag that starts with 'Popular times at' is present
-			WebDriverWait(d, config.SLEEP_SEC).until(EC.presence_of_element_located((By.XPATH, '//*[starts-with(@id, "Popular times at")]')))
-			# WebDriverWait(d, config.SLEEP_SEC).until(EC.presence_of_element_located((By.CLASS, 'fMc7Ne mQXJne gjs6Ee')))
+			# Wait until an element with aria-label containing "% busy" is present
+			element = WebDriverWait(d, config.SLEEP_SEC).until(EC.presence_of_element_located((By.CSS_SELECTOR, "[aria-label*='% busy']")))
 		except TimeoutException:
 			print('ERROR: Timeout! (This could be due to missing "popular times" data, or not enough waiting.)',u)
 
