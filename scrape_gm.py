@@ -167,16 +167,9 @@ def get_html(u,file_name):
 		return html
 
 def parse_html(html):
-
 	soup = BeautifulSoup(html,features='html.parser')
 
-	# there is no class 'section-popular-times-bar'
-	# pops = soup.find_all('div', {'class': 'section-popular-times-bar'})
-	# find element containing a tag that starts with 'Popular times at'
-	div_tag_list = soup.find(
-					lambda tag:tag.name == "div" and tag.has_attr('aria-label') and
-					str.startswith(tag["aria-label"],'Popular times at'))
-
+	pops = soup.find_all('div', {'aria-label': lambda x: x and '% busy' in x})
 
 	# find div containing 7 divs (one for each week day):
 	for div_tag in div_tag_list:
@@ -186,9 +179,14 @@ def parse_html(html):
 	# hour = 0
 	# dow = 0
 	data = []
-	for dow, weekday_tag in enumerate(div_tag):
-		pops = weekday_tag.find_all(lambda tag:tag.name == "div" and tag.has_attr('aria-label'))
-		hour = -1
+
+	for pop in pops:
+		# note that data is stored sunday first, regardless of the local
+		t = pop['aria-label']
+		# debugging
+		# print(t)
+
+		hour_prev = hour
 		freq_now = None
 
 		# iterate over hours to get popularity data
