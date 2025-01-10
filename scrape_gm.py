@@ -46,14 +46,8 @@ def main():
 	# write to folder logs to remember the state of the config file
 	urls.to_csv('logs' + os.sep + run_time + '.log', index = False)
 
-	# url_list = urls.iloc[:, 0].tolist()
-	# for url in url_list:
-	for index, row in urls.iterrows():
-		url = row['#url']
-		if len(row) > 1:
-			name = row['name']
-		else:
-			name = url
+	url_list = urls.iloc[:, 0].tolist()
+	for url in url_list:
 		#print(urllib.parse.urlparse(url))
 		#print (url)
 
@@ -77,8 +71,7 @@ def main():
 
 				# write data
 				for row in data:
-					# f.write(config.DELIM.join((file_name,url,run_time)) + config.DELIM + config.DELIM.join([str(x or '') for x in row])+'\n')
-					f.write(config.DELIM.join((name,url,run_time)) + config.DELIM + config.DELIM.join([str(x or '') for x in row])+'\n')
+					f.write(config.DELIM.join((file_name,url,run_time)) + config.DELIM + config.DELIM.join([str(x or '') for x in row])+'\n')
 
 			print('DONE:', url, run_time)
 
@@ -171,13 +164,8 @@ def parse_html(html):
 
 	pops = soup.find_all('div', {'aria-label': lambda x: x and '% busy' in x})
 
-	# find div containing 7 divs (one for each week day):
-	for div_tag in div_tag_list:
-		if len(div_tag.find_all('div', recursive=False)) == 7:
-			break
-
-	# hour = 0
-	# dow = 0
+	hour = 0
+	dow = 0
 	data = []
 
 	for pop in pops:
@@ -207,28 +195,20 @@ def parse_html(html):
 				except:
 					freq_now = None
 
-					# gmaps gives the current popularity,
-					# but only the current hour has it
-					try:
-						freq_now = int((t.split()[1]).split('%')[0])
-					except:
-						freq_now = None
-
-				# if hour < hour_prev:
-				# 	# increment the day if the hour decreases
-				# 	dow += 1
-
-				data.append([days[dow], hour, freq, freq_now])
-				freq_now = None
-				# could also store an array of dictionaries
-				#data.append({'day' : days[dow % 7], 'hour' : hour, 'popularity' : freq})
-
-			except:
-				# if a day is missing, the line(s) won't be parsable
-				# this can happen if the place is closed on that day
-				# skip them, hope it's only 1 day per line,
-				# and increment the day counter
+			if hour < hour_prev:
+				# increment the day if the hour decreases
 				dow += 1
+
+			data.append([days[dow % 7], hour, freq, freq_now])
+			# could also store an array of dictionaries
+			#data.append({'day' : days[dow % 7], 'hour' : hour, 'popularity' : freq})
+
+		except:
+			# if a day is missing, the line(s) won't be parsable
+			# this can happen if the place is closed on that day
+			# skip them, hope it's only 1 day per line,
+			# and increment the day counter
+			dow += 1
 
 	return data
 
