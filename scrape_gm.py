@@ -46,14 +46,8 @@ def main():
 	# write to folder logs to remember the state of the config file
 	urls.to_csv('logs' + os.sep + run_time + '.log', index = False)
 
-	# url_list = urls.iloc[:, 0].tolist()
-	# for url in url_list:
-	for index, row in urls.iterrows():
-		url = row['#url']
-		if len(row) > 1:
-			name = row['name']
-		else:
-			name = url
+	url_list = urls.iloc[:, 0].tolist()
+	for url in url_list:
 		#print(urllib.parse.urlparse(url))
 		#print (url)
 
@@ -77,8 +71,7 @@ def main():
 
 				# write data
 				for row in data:
-					# f.write(config.DELIM.join((file_name,url,run_time)) + config.DELIM + config.DELIM.join([str(x or '') for x in row])+'\n')
-					f.write(config.DELIM.join((name,url,run_time)) + config.DELIM + config.DELIM.join([str(x or '') for x in row])+'\n')
+					f.write(config.DELIM.join((file_name,url,run_time)) + config.DELIM + config.DELIM.join([str(x or '') for x in row])+'\n')
 
 			print('DONE:', url, run_time)
 
@@ -171,15 +164,9 @@ def get_html(u,file_name):
 		return html
 
 def parse_html(html):
-
 	soup = BeautifulSoup(html,features='html.parser')
 
-	# there is no class 'section-popular-times-bar'
-	# pops = soup.find_all('div', {'class': 'section-popular-times-bar'})
-	# find element containing a tag that starts with 'Popular times at'
-	div_tag_list = soup.find(
-					lambda tag:tag.name == "div" and tag.has_attr('aria-label') and
-					str.startswith(tag["aria-label"],'Popular times at'))
+	pops = soup.find_all('div', {'aria-label': lambda x: x and '% busy' in x})
 
 	# pops = soup.find_all('div', {'aria-label': lambda x: x and '% busy' in x})
 
@@ -191,53 +178,60 @@ def parse_html(html):
 	# hour = 0
 	# dow = 0
 	data = []
-	for dow, weekday_tag in enumerate(div_tag):
-		pops = weekday_tag.find_all(lambda tag:tag.name == "div" and tag.has_attr('aria-label'))
-		hour = -1
+
+	for pop in pops:
+		# note that data is stored sunday first, regardless of the local
+		t = pop['aria-label']
+		# debugging
+		# print(t)
+
+		hour_prev = hour
 		freq_now = None
 
-		# iterate over hours to get popularity data
-		for pop in pops:
-			# note that data is stored sunday first, regardless of the local
-			t = pop['aria-label']
-			# debugging
-			# print(t)
+		try:
+			if 'usually' not in t:
+				# Example: 61% busy at 10 AM.
+				freq = int(t.split('%')[0])  # Extract "25%"
+				hour = int(convert_time(t.split('at ')[1].strip('.')))  # Extract "8 AM"
+			else:
+				# Example: Currently 53% busy, usually 74% busy (no hour provided)
+				# hour is the previous value + 1
+				freq = int(t.split("%")[-2].split()[-1])
+				hour = hour + 1
 
-			try:
-				# if the text doesn't contain 'usually', it's a regular hour
-				if 'usually' not in t:
-					hour = int(t.split()[3])
-					freq = int(t.split('%')[0]) # gm uses int
-				else:
-					# the current hour has special text
-					# hour is the previous value + 1
-					hour = hour + 1
-					freq = int((t.split()[-2]).split('%')[0])
+				# gmaps gives the current popularity,
+				# but only the current hour has it
+				try:
+					freq_now =  int(t.split("%")[0].split()[1])
+				except:
+					freq_now = None
 
-					# gmaps gives the current popularity,
-					# but only the current hour has it
-					try:
-						freq_now = int((t.split()[1]).split('%')[0])
-					except:
-						freq_now = None
-
-				# if hour < hour_prev:
-				# 	# increment the day if the hour decreases
-				# 	dow += 1
-
-				data.append([days[dow], hour, freq, freq_now])
-				freq_now = None
-				# could also store an array of dictionaries
-				#data.append({'day' : days[dow % 7], 'hour' : hour, 'popularity' : freq})
-
-			except:
-				# if a day is missing, the line(s) won't be parsable
-				# this can happen if the place is closed on that day
-				# skip them, hope it's only 1 day per line,
-				# and increment the day counter
+			if hour < hour_prev:
+				# increment the day if the hour decreases
 				dow += 1
 
+			data.append([days[dow % 7], hour, freq, freq_now])
+			# could also store an array of dictionaries
+			#data.append({'day' : days[dow % 7], 'hour' : hour, 'popularity' : freq})
+
+		except:
+			# if a day is missing, the line(s) won't be parsable
+			# this can happen if the place is closed on that day
+			# skip them, hope it's only 1 day per line,
+			# and increment the day counter
+			dow += 1
+
 	return data
+
+def convert_time(time_str):
+	hr = int(time_str.split()[0])
+    # Convert AM/PM time to 24-hour time
+	if 'PM' in time_str:
+		hr %= 12
+		hr += 12
+	elif 'AM' in time_str:
+		hr %= 12
+	return hr  # If no AM/PM is found, just return the time as is
 
 if __name__ == '__main__':
 	main()
